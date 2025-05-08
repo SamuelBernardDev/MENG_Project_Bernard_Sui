@@ -1,0 +1,23 @@
+data:
+  xls_files: 'datasets/raw/*.xls'
+  feature_columns:
+    - 'Temperature'
+    - 'Humidity'
+    - 'Latitude'
+    - 'Longitude'
+    - 'Hydrogen Sulfide - LC (PPM)'
+    - 'Hydrogen (PPM)'
+    - 'Nitric Oxide - LC (PPM)'
+    - 'Air Contaminants (PPM)'
+    - 'VOCs PID - LC (PPM)'
+    - 'Methane - LEL (PPM)'
+    - 'Carbon Dioxide - LC (PPM)'
+  label_map:
+    air: 0
+    sam: 1
+    steph: 2
+
+training:
+  epochs_per_file: 5
+  batch_size: 1
+  learning_rate: 0.001
