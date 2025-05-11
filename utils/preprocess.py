@@ -1,37 +1,47 @@
 import numpy as np
 import pandas as pd
+from utils.loading_data import load_excel
+import torch
 
 
-def compute_global_min_max(data_frames, columns):
-    global_min, global_max = {}, {}
-    for df in data_frames.values():
-        for col in columns:
-            col_min, col_max = df[col].min(), df[col].max()
-            global_min[col] = min(global_min.get(col, col_min), col_min)
-            global_max[col] = max(global_max.get(col, col_max), col_max)
-    return global_min, global_max
+def compute_global_min_max(file_paths, columns):
+    dfs = [pd.read_excel(fp)[columns] for fp in file_paths]
+    concat_df = pd.concat(dfs)
+    return concat_df.min(), concat_df.max()
 
 
-def normalize_data(data_frames, columns, global_min, global_max):
-    normalized = {}
-    for fp, df in data_frames.items():
-        df_norm = df.copy()
-        for col in columns:
-            mn, mx = global_min[col], global_max[col]
-            df_norm[col] = (df[col] - mn) / (mx - mn) if mx != mn else 0.0
-        normalized[fp] = df_norm
-    return normalized
+def normalize(df, global_min, global_max):
+    return (df - global_min) / (global_max - global_min)
 
 
-def interpolate_and_clip(normalized, columns):
-    min_end = min(df.index.max() for df in normalized.values())
-    common_times = np.unique(
-        np.concatenate([df.index.values for df in normalized.values()])
-    )
-    common_times = common_times[common_times <= min_end]
+def interpolate_df(df, interval=1, max_length=None):
+    """
+    Interpolates a DataFrame on a uniform time grid.
 
-    for fp, df in normalized.items():
-        df = df[columns].reindex(common_times).interpolate()
-        normalized[fp] = df
+    Args:
+        df (pd.DataFrame): Input dataframe with time index (seconds).
+        interval (int): Time step in seconds (default = 1s).
+        max_length (int or None): If set, truncate to this number of seconds.
 
-    return normalized, common_times
+    Returns:
+        pd.DataFrame: Interpolated and optionally truncated dataframe.
+    """
+    max_time = df.index.max()
+    if max_length is not None:
+        end_time = min(max_time, max_length)
+    else:
+        end_time = max_time
+
+    common_times = np.arange(0, end_time, interval)
+    return df.reindex(common_times).interpolate().fillna(0)
+
+
+def preprocess_single_file(
+    file_path, columns, global_min, global_max, time_format="%I:%M:%S%p"
+):
+    df = load_excel(file_path, columns, time_format)
+    df_norm = normalize(df, global_min, global_max)
+    df_interp = interpolate_df(df_norm)
+    return torch.tensor(df_interp.values.astype("float32")).unsqueeze(
+        0
+    )  # shape [1, T, F]

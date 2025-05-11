@@ -1,42 +1,52 @@
 import torch
 from torch.utils.data import DataLoader
 from src.models.model import LSTMClassifier
-from utils.data_loader import load_excel_files
-from utils.preprocess import (
-    compute_global_min_max,
-    normalize_data,
-    interpolate_and_clip,
-)
-from pathlib import Path
+from utils.data_loader import ExcelDataset  # make sure this is the updated version
 import yaml
-import glob
 
-# Load config
-with open("config.yaml") as file:
-    config = yaml.safe_load(file)
+# === Load config ===
+with open("config.yaml") as f:
+    config = yaml.safe_load(f)
 
-xls_files = glob.glob(config["data"]["xls_files"])
-print(xls_files)
-data_frames = load_excel_files(xls_files)
-global_min, global_max = compute_global_min_max(
-    data_frames, config["data"]["feature_columns"]
-)
-normalized = normalize_data(
-    data_frames, config["data"]["feature_columns"], global_min, global_max
-)
-normalized, common_times = interpolate_and_clip(
-    normalized, config["data"]["feature_columns"]
+# === Initialize dataset ===
+dataset = ExcelDataset(
+    root_folder=config["data"]["root_folder"],
+    columns=config["data"]["columns"],
+    stats_path=config["data"]["stats_path"],
 )
 
-# Prepare PyTorch Dataset (custom implementation)
-# ... Define your PyTorch dataset class here
+# === Create DataLoader ===
+train_loader = DataLoader(
+    dataset, batch_size=config["train"]["batch_size"], shuffle=True
+)
 
-# Model setup
+# === Initialize model ===
 model = LSTMClassifier(
-    input_size=len(config["data"]["feature_columns"]),
-    hidden_sizes=[64, 32],
-    num_classes=len(config["data"]["label_map"]),
+    input_size=len(config["data"]["columns"]),
+    hidden_size=config["model"]["hidden_size"],
+    num_layers=config["model"]["num_layers"],
+    num_classes=len(dataset.label_map),  # Dynamically get number of classes
 )
 
-# Training loop (basic structure)
-# ... PyTorch training loop here
+# === Optimizer and loss ===
+criterion = torch.nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=config["train"]["learning_rate"])
+
+# === Training loop ===
+for epoch in range(config["train"]["epochs"]):
+    model.train()
+    total_loss = 0
+    for sequences, labels in train_loader:
+        optimizer.zero_grad()
+        outputs = model(sequences)  # shape: [batch_size, num_classes]
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+
+    avg_loss = total_loss / len(train_loader)
+    print(f"Epoch [{epoch + 1}/{config['train']['epochs']}], Loss: {avg_loss:.4f}")
+
+# === Save model ===
+torch.save(model.state_dict(), config["train"]["model_save_path"])
+print("✅ Model saved.")

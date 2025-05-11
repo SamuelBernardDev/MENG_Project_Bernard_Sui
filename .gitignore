@@ -99,3 +99,6 @@ datasets/processed/*
 datasets/interim/*
 models/checkpoints/*
 models/pretrained/*
+
+src/data/processed/*
+src/models/checkpoints/*

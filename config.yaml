@@ -1,23 +1,24 @@
 data:
-  xls_files: './data/raw/StephBrush_InitialData/*.xls'
-  feature_columns:
-    - 'Temperature'
-    - 'Humidity'
-    - 'Latitude'
-    - 'Longitude'
-    - 'Hydrogen Sulfide - LC (PPM)'
-    - 'Hydrogen (PPM)'
-    - 'Nitric Oxide - LC (PPM)'
-    - 'Air Contaminants (PPM)'
-    - 'VOCs PID - LC (PPM)'
-    - 'Methane - LEL (PPM)'
-    - 'Carbon Dioxide - LC (PPM)'
-  label_map:
-    air: 0
-    sam: 1
-    steph: 2
+  root_folder: "data/raw"
+  columns:
+    - Temperature
+    - Humidity
+    - Hydrogen Sulfide - LC (PPM)
+    - Hydrogen (PPM)
+    - Nitric Oxide - LC (PPM)
+    - Air Contaminants (PPM)
+    - VOCs PID - LC (PPM)
+    - Methane - LEL (PPM)
+    - Carbon Dioxide - LC (PPM)
+  stats_path: "src/data/normalization_stats.json"
 
-training:
-  epochs_per_file: 5
-  batch_size: 1
+model:
+  hidden_size: 64
+  num_layers: 2
+
+train:
+  epochs: 10
+  batch_size: 4
   learning_rate: 0.001
+  model_save_path: "src/models/checkpoints/lstm_model.pth"
+

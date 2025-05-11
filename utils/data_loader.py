@@ -1,13 +1,83 @@
+import os
+import json
+import glob
+import torch
 import pandas as pd
-from pathlib import Path
+from torch.utils.data import Dataset
+import numpy as np
+
+from utils.preprocess import compute_global_min_max, normalize, interpolate_df
+from utils.loading_data import load_excel  # Load and format an Excel file
 
 
-def load_excel_files(file_paths, time_format="%I:%M:%S%p"):
-    data_frames = {}
-    for fp in file_paths:
-        df = pd.read_excel(fp)
-        df["Time"] = pd.to_datetime(df["Time"], format=time_format)
-        df["seconds"] = (df["Time"] - df["Time"].iloc[0]).dt.total_seconds()
-        df.set_index("seconds", inplace=True)
-        data_frames[fp] = df
-    return data_frames
+class ExcelDataset(Dataset):
+    def __init__(self, root_folder, columns, time_format="%I:%M:%S%p", stats_path=None):
+        self.columns = columns
+        self.time_format = time_format
+        self.stats_path = stats_path
+
+        # Assign labels from subfolders
+        subfolders = [f.path for f in os.scandir(root_folder) if f.is_dir()]
+        subfolders.sort()
+        self.label_map = {
+            os.path.basename(folder).lower(): i for i, folder in enumerate(subfolders)
+        }
+
+        # Gather all file paths and corresponding labels
+        self.file_paths = []
+        self.labels = []
+        for folder, label in self.label_map.items():
+            full_folder = os.path.join(root_folder, folder)
+            files = glob.glob(os.path.join(full_folder, "*.xls"))
+            self.file_paths.extend(files)
+            self.labels.extend([label] * len(files))
+
+        # Load or compute normalization stats
+        if self.stats_path and os.path.exists(self.stats_path):
+            with open(self.stats_path) as f:
+                stats = json.load(f)
+            self.global_min = pd.Series(stats["min"])
+            self.global_max = pd.Series(stats["max"])
+            self.min_seq_len = stats["min_seq_len"]
+        else:
+            self.global_min, self.global_max = compute_global_min_max(
+                self.file_paths, columns
+            )
+            self.min_seq_len = self._compute_min_sequence_length()
+            if self.stats_path:
+                with open(self.stats_path, "w") as f:
+                    json.dump(
+                        {
+                            "min": self.global_min.to_dict(),
+                            "max": self.global_max.to_dict(),
+                            "min_seq_len": self.min_seq_len,
+                        },
+                        f,
+                    )
+
+    def _compute_min_sequence_length(self):
+        min_len = float("inf")
+        for file in self.file_paths:
+            df = load_excel(file, self.columns, self.time_format)
+            duration = df.index.max()
+            if duration < min_len:
+                min_len = duration
+        return int(min_len)
+
+    def __len__(self):
+        return len(self.file_paths)
+
+    def __getitem__(self, idx):
+        file = self.file_paths[idx]
+        label = self.labels[idx]
+
+        df = load_excel(file, self.columns, self.time_format)
+        df_norm = normalize(df, self.global_min, self.global_max)
+
+        # Use updated interpolate_df to truncate automatically
+        df_final = interpolate_df(df_norm, interval=1, max_length=self.min_seq_len)
+
+        sequence = torch.tensor(df_final.values.astype(np.float32))
+        label = torch.tensor(label)
+
+        return sequence, label
