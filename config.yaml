@@ -1,5 +1,5 @@
 data:
-  xls_files: 'datasets/raw/*.xls'
+  xls_files: './data/raw/StephBrush_InitialData/*.xls'
   feature_columns:
     - 'Temperature'
     - 'Humidity'
