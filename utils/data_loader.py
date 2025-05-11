@@ -11,19 +11,26 @@ from utils.loading_data import load_excel  # Load and format an Excel file
 
 
 class ExcelDataset(Dataset):
-    def __init__(self, root_folder, columns, time_format="%I:%M:%S%p", stats_path=None):
+    def __init__(
+        self,
+        root_folder,
+        columns,
+        time_format="%I:%M:%S%p",
+        stats_path=None,
+        use_stats=True,
+    ):
         self.columns = columns
         self.time_format = time_format
         self.stats_path = stats_path
+        self.use_stats = use_stats
 
-        # Assign labels from subfolders
+        # Assign labels based on folder names
         subfolders = [f.path for f in os.scandir(root_folder) if f.is_dir()]
         subfolders.sort()
         self.label_map = {
             os.path.basename(folder).lower(): i for i, folder in enumerate(subfolders)
         }
 
-        # Gather all file paths and corresponding labels
         self.file_paths = []
         self.labels = []
         for folder, label in self.label_map.items():
@@ -32,8 +39,8 @@ class ExcelDataset(Dataset):
             self.file_paths.extend(files)
             self.labels.extend([label] * len(files))
 
-        # Load or compute normalization stats
-        if self.stats_path and os.path.exists(self.stats_path):
+        # === Normalization stats: use or compute ===
+        if self.stats_path and use_stats and os.path.exists(self.stats_path):
             with open(self.stats_path) as f:
                 stats = json.load(f)
             self.global_min = pd.Series(stats["min"])
@@ -73,8 +80,6 @@ class ExcelDataset(Dataset):
 
         df = load_excel(file, self.columns, self.time_format)
         df_norm = normalize(df, self.global_min, self.global_max)
-
-        # Use updated interpolate_df to truncate automatically
         df_final = interpolate_df(df_norm, interval=1, max_length=self.min_seq_len)
 
         sequence = torch.tensor(df_final.values.astype(np.float32))

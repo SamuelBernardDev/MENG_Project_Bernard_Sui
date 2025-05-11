@@ -13,6 +13,7 @@ dataset = ExcelDataset(
     root_folder=config["data"]["root_folder"],
     columns=config["data"]["columns"],
     stats_path=config["data"]["stats_path"],
+    use_stats=config["data"]["use_stats"],
 )
 
 # === Create DataLoader ===
