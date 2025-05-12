@@ -14,12 +14,13 @@ data:
   use_stats: false
 
 model:
-  hidden_size: 64
-  num_layers: 2
+  hidden_size: 128
+  num_layers: 3
 
 train:
-  epochs: 10
+  epochs: 200
   batch_size: 4
   learning_rate: 0.001
+  val_ratio: 0.25
   model_save_path: "src/models/checkpoints/lstm_model.pth"
 

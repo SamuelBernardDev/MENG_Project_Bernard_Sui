@@ -1,45 +1,57 @@
+import os
+import glob
 import torch
 import json
-import pandas as pd
-from utils.preprocess import preprocess_single_file
-from models.model import LSTMClassifier
 import yaml
+import pandas as pd
+from src.models.model import LSTMClassifier
+from utils.loading_data import load_excel
+from utils.preprocess import normalize, interpolate_df
 
-# Load config
+# === Load config and stats ===
 with open("config.yaml") as f:
     config = yaml.safe_load(f)
 
-# Load normalization stats
-with open("src/data/normalization_stats.json") as f:
+stats_path = config["data"]["stats_path"]
+with open(stats_path) as f:
     stats = json.load(f)
 
 global_min = pd.Series(stats["min"])
 global_max = pd.Series(stats["max"])
+min_seq_len = stats["min_seq_len"]
+columns = config["data"]["columns"]
+time_format = "%I:%M:%S%p"  # or config["data"].get("time_format", ...)
 
-# File to test
-file_path = "src/data/raw/test_fast_01.xls"
-
-# Preprocess the file
-sequence = preprocess_single_file(
-    file_path,
-    columns=config["data"]["columns"],
-    global_min=global_min,
-    global_max=global_max,
-    time_format="%I:%M:%S%p",
-)  # shape [1, T, F]
-
-# Load model
+# === Load trained model ===
 model = LSTMClassifier(
-    input_size=len(config["data"]["columns"]),
-    hidden_size=64,
-    num_layers=2,
-    num_classes=2,
+    input_size=len(columns),
+    hidden_size=config["model"]["hidden_size"],
+    num_layers=config["model"]["num_layers"],
+    num_classes=2,  # brush vs fasted
 )
 model.load_state_dict(torch.load(config["train"]["model_save_path"]))
 model.eval()
 
-# Run inference
-with torch.no_grad():
-    output = model(sequence)
-    pred_class = torch.argmax(output, dim=1).item()
-    print(f"Predicted class: {pred_class} ({'brush' if pred_class == 0 else 'fast'})")
+# === Test files ===
+test_root = "data/test"
+test_files = glob.glob(os.path.join(test_root, "*/*.xls"))
+
+# === Inference loop ===
+print("🧪 Running inference on test files:\n")
+for file_path in test_files:
+    # --- Preprocess single file ---
+    df = load_excel(file_path, columns, time_format)
+    df_norm = normalize(df, global_min, global_max)
+    df_interp = interpolate_df(df_norm, interval=1, max_length=min_seq_len)
+
+    sequence = torch.tensor(df_interp.values.astype("float32")).unsqueeze(
+        0
+    )  # shape [1, T, F]
+
+    # --- Predict ---
+    with torch.no_grad():
+        output = model(sequence)  # [1, num_classes]
+        pred = torch.argmax(output, dim=1).item()
+
+    label_str = "Brush" if pred == 0 else "Fasted"
+    print(f"{file_path}: 🧠 Predicted class = {label_str}")
