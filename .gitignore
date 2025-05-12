@@ -102,3 +102,4 @@ models/pretrained/*
 
 src/data/processed/*
 src/models/checkpoints/*
+wandb/
