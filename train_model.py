@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import DataLoader, random_split
-from src.models.model import LSTMClassifier
+from src.models.LSTMModel import LSTMClassifier
 from utils.data_loader import ExcelDataset
 from sklearn.model_selection import KFold
 from torch.utils.data import Subset
