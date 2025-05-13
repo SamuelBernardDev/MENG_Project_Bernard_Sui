@@ -36,6 +36,19 @@ def interpolate_df(df, interval=1, max_length=None):
     return df.reindex(common_times).interpolate().fillna(0)
 
 
+def grayscale(df):
+    """
+    Convert a DataFrame to grayscale by averaging the columns.
+
+    Args:
+        df (pd.DataFrame): Input dataframe.
+
+    Returns:
+        pd.DataFrame: Grayscale dataframe.
+    """
+    return df.mean(axis=1, keepdims=True)
+
+
 def preprocess_single_file(
     file_path, columns, global_min, global_max, time_format="%I:%M:%S%p"
 ):

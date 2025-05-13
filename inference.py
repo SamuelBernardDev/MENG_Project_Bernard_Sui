@@ -4,7 +4,7 @@ import torch
 import json
 import yaml
 import pandas as pd
-from src.models.model import LSTMClassifier
+from src.models.LSTMModel import LSTMClassifier
 from utils.loading_data import load_excel
 from utils.preprocess import normalize, interpolate_df
 

@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader, random_split
-from src.models.LSTMModel import LSTMClassifier
-from utils.data_loader import ExcelDatasetTimeSeries
+from src.models.LSTMModel import CNNModel
+from utils.data_loader import ExcelDatasetCNN
 from sklearn.model_selection import KFold
 from torch.utils.data import Subset
 import yaml
@@ -15,7 +15,7 @@ with open("config.yaml") as f:
 wandb.init(project="lstm-breath-analysis", config=config)
 
 # === Initialize dataset ===
-dataset = ExcelDatasetTimeSeries(
+dataset = ExcelDatasetCNN(
     root_folder=config["data"]["root_folder"],
     columns=config["data"]["columns"],
     stats_path=config["data"]["stats_path"],
@@ -34,7 +34,7 @@ train_loader = DataLoader(
 val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
 
 # === Initialize model ===
-model = LSTMClassifier(
+model = CNNModel(
     input_size=len(config["data"]["columns"]),
     hidden_size=config["model"]["hidden_size"],
     num_layers=config["model"]["num_layers"],
@@ -49,7 +49,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=config["train"]["learning_ra
 kf = KFold(n_splits=4, shuffle=True, random_state=42)
 
 for fold, (train_idx, val_idx) in enumerate(kf.split(dataset)):
-    print(f"\nFold {fold + 1}")
+    print(f"\n Fold {fold + 1}")
 
     # Create DataLoaders for this fold
     train_set = Subset(dataset, train_idx)
@@ -61,7 +61,7 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(dataset)):
     val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
 
     # Initialize a new model for each fold
-    model = LSTMClassifier(
+    model = CNNModel(
         input_size=len(config["data"]["columns"]),
         hidden_size=config["model"]["hidden_size"],
         num_layers=config["model"]["num_layers"],
