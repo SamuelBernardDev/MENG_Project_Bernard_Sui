@@ -63,8 +63,8 @@ First, you will need to have git-bash installed or open to clone the repository 
 ### Clone and Open
 
 ```bash
-git clone 
-cd 
+git clone https://github.com/SamuelBernardDev/MENG_Project_Bernard_Sui.git
+cd MENG_Project_Bernard_Sui
 code .
 ```
 
