@@ -101,5 +101,5 @@ models/checkpoints/*
 models/pretrained/*
 
 src/data/processed/*
-src/models/checkpoints/*
+src/models/checkpoints/
 wandb/
