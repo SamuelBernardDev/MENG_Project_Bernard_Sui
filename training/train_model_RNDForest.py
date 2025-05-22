@@ -87,7 +87,7 @@ plt.show()
 wandb.log({f"feature_importance/{name}": float(imp) for name, imp in zip(top_features, top_importances)})
 
 # === Inference on data/test ===
-print("\n🔍 Running inference on unseen test data...")
+print("\n Running inference on unseen test data...")
 
 test_dataset = ExcelDatasetTimeSeries(
     root_folder="data/test",
