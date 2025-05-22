@@ -12,12 +12,8 @@ data:
     - Carbon Dioxide - LC (PPM)
   stats_path: "src/data/normalization_stats.json"
   use_stats: false
-  min_required_length: 50.0
-  derivative_columns:
-    - Hydrogen Sulfide - LC (PPM)
-    - Hydrogen (PPM)
-    - Nitric Oxide - LC (PPM)
-    - Carbon Dioxide - LC (PPM)
+  min_required_length: 40.0
+  derivative_columns: []
 
 model:
   hidden_size: 128
