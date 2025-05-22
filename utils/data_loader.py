@@ -47,35 +47,46 @@ class ExcelDatasetTimeSeries(Dataset):
         for folder, label in self.label_map.items():
             full_folder = os.path.join(root_folder, folder)
             files = glob.glob(os.path.join(full_folder, "*.xls"))
-
             for f in files:
-                try:
                     df = load_excel(f, self.columns, self.time_format)
-
-                    # Compute rate of change columns
-                    for col in self.derivative_columns:
-                        if col in df.columns:
-                            df[f"{col}_rate"] = df[col].diff().fillna(0)
-
-                    if df.index.max() >= self.min_required_length:
-                        self.file_paths.append(f)
-                        self.labels.append(label)
-                        self.min_seq_len = min(self.min_seq_len, df.index.max())
-
-                        # Update min/max stats
-                        if not use_stats:
-                            for col in all_features:
-                                if col in df.columns:
-                                    col_min = df[col].min()
-                                    col_max = df[col].max()
-                                    self.global_min[col] = min(self.global_min.get(col, col_min), col_min)
-                                    self.global_max[col] = max(self.global_max.get(col, col_max), col_max)
-                        else:
-                            continue
+                    if self.stats_path and self.use_stats and os.path.exists(self.stats_path):
+                        with open(self.stats_path) as stats_file:
+                            stats = json.load(stats_file)
+                        self.global_min = pd.Series(stats["min"])
+                        self.global_max = pd.Series(stats["max"])
+                        self.min_seq_len = stats["min_seq_len"]
+                        if df.index.max() >= self.min_seq_len:
+                            self.file_paths.append(f)
+                            self.labels.append(label)
+                        else: 
+                            print(f"Skipping {os.path.basename(f)} (duration < {self.min_required_length}s)")
+                            
                     else:
-                        print(f"Skipping {os.path.basename(f)} (duration < {self.min_required_length}s)")
-                except Exception as e:
-                    print(f"Skipping {os.path.basename(f)} due to error: {e}")
+                        try:
+                            # Compute rate of change columns
+                            for col in self.derivative_columns:
+                                if col in df.columns:
+                                    df[f"{col}_rate"] = df[col].diff().fillna(0)
+
+                            if df.index.max() >= self.min_required_length:
+                                self.file_paths.append(f)
+                                self.labels.append(label)
+                                self.min_seq_len = min(self.min_seq_len, df.index.max())
+
+                                # Update min/max stats
+                                if not use_stats:
+                                    for col in all_features:
+                                        if col in df.columns:
+                                            col_min = df[col].min()
+                                            col_max = df[col].max()
+                                            self.global_min[col] = min(self.global_min.get(col, col_min), col_min)
+                                            self.global_max[col] = max(self.global_max.get(col, col_max), col_max)
+                                else:
+                                    continue
+                            else:
+                                print(f"Skipping {os.path.basename(f)} (duration < {self.min_required_length}s)")
+                        except Exception as e:
+                            print(f"Skipping {os.path.basename(f)} due to error: {e}")
 
         self.global_min = pd.Series(self.global_min)
         self.global_max = pd.Series(self.global_max)
@@ -90,12 +101,7 @@ class ExcelDatasetTimeSeries(Dataset):
                     "min_seq_len": self.min_seq_len
                 }, f)
 
-        elif self.stats_path and self.use_stats and os.path.exists(self.stats_path):
-            with open(self.stats_path) as f:
-                stats = json.load(f)
-            self.global_min = pd.Series(stats["min"])
-            self.global_max = pd.Series(stats["max"])
-            self.min_seq_len = stats["min_seq_len"]
+    
 
     def __len__(self):
         return len(self.file_paths)

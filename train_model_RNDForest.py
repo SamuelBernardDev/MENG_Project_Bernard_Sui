@@ -64,16 +64,15 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
 
 # === Final Summary ===
 mean_acc = sum(fold_val_accuracies) / len(fold_val_accuracies)
-print(f"\n✅ Cross-validation complete. Mean Validation Accuracy: {mean_acc:.2%}")
+print(f"\n Cross-validation complete. Mean Validation Accuracy: {mean_acc:.2%}")
 wandb.log({"crossval_mean_val_accuracy": mean_acc})
 
 # === Feature Importance ===
 avg_importances = np.mean(all_importances, axis=0)
-T, F = dataset[0][0].shape  # get shape of one sample
+T, F = dataset[0][0].shape
 feature_names = config["data"]["columns"] + [f"{col}_rate" for col in config["data"].get("derivative_columns", [])]
 expanded_names = [f"{name}_t{t}" for t in range(T) for name in feature_names]
 
-# === Rank and plot top 20 ===
 indices = np.argsort(avg_importances)[::-1][:20]
 top_features = [expanded_names[i] for i in indices]
 top_importances = avg_importances[indices]
@@ -85,5 +84,39 @@ plt.xlabel("Average Importance")
 plt.tight_layout()
 plt.show()
 
-# === Log to wandb
 wandb.log({f"feature_importance/{name}": float(imp) for name, imp in zip(top_features, top_importances)})
+
+# === Inference on data/test ===
+print("\n🔍 Running inference on unseen test data...")
+
+test_dataset = ExcelDatasetTimeSeries(
+    root_folder="data/test",
+    columns=config["data"]["columns"],
+    stats_path=config["data"]["stats_path"],
+    use_stats=True,
+    min_required_length=config["data"]["min_required_length"],
+    derivative_columns=config["data"].get("derivative_columns", [])
+)
+
+X_test = []
+y_test = []
+
+for i in range(len(test_dataset)):
+    try:
+        sequence, label = test_dataset[i]
+        X_test.append(sequence.numpy().flatten())
+        y_test.append(label.item())
+    except Exception as e:
+        print(f"Skipping test index {i} due to error: {e}")
+X_test = np.array(X_test)
+y_test = np.array(y_test)
+
+y_pred_test = model.predict(X_test)
+test_acc = accuracy_score(y_test, y_pred_test)
+
+print(f"Test Accuracy on unseen data: {test_acc:.2%}")
+wandb.log({"test_accuracy": test_acc})
+
+print("\n Class Label Mapping:")
+for name, idx in test_dataset.label_map.items():
+    print(f"  Label {idx}: {name}")

@@ -37,7 +37,7 @@ for i in range(len(dataset)):
 X_data = np.array(X_data)
 y_labels = np.array(y_labels)
 
-print(f"✅ Loaded {len(X_data)} samples for PCA.")
+print(f" Loaded {len(X_data)} samples for PCA.")
 
 # === PCA Reduction ===
 pca = PCA(n_components=2)

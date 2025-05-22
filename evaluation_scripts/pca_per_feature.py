@@ -40,7 +40,7 @@ if X_data.ndim != 3:
     raise ValueError("Expected 3D array [samples, time, features]")
 
 N, T, F = X_data.shape
-print(f"✅ Loaded {N} sequences with {T} time steps and {F} features each.")
+print(f" Loaded {N} sequences with {T} time steps and {F} features each.")
 
 # === Setup ===
 feature_names = config["data"]["columns"] + [f"{col}_rate" for col in config["data"].get("derivative_columns", [])]
@@ -76,7 +76,11 @@ for i in range(F):
         print(f"Failed PCA for feature {feature_names[i]}: {e}")
 
 # === Ranking ===
-print("\n📊 PCA Separation Scores:")
+print("\n PCA Separation Scores:")
 ranked = sorted(separation_scores.items(), key=lambda x: x[1], reverse=True)
 for i, (name, score) in enumerate(ranked, 1):
     print(f"{i}. {name}: {score:.2f}")
+
+print("\n Class Label Mapping (folder name → label index):")
+for name, idx in dataset.label_map.items():
+    print(f"  Label {idx}: {name}")
