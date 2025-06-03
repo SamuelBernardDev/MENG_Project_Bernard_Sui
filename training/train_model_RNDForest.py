@@ -22,7 +22,7 @@ dataset = ExcelDatasetTimeSeries(
     stats_path=config["data"]["stats_path"],
     use_stats=config["data"]["use_stats"],
     min_required_length=config["data"]["min_required_length"],
-    derivative_columns=config["data"].get("derivative_columns", [])
+    derivative_columns=config["data"].get("derivative_columns", []),
 )
 
 # === Load all data into arrays ===
@@ -70,7 +70,9 @@ wandb.log({"crossval_mean_val_accuracy": mean_acc})
 # === Feature Importance ===
 avg_importances = np.mean(all_importances, axis=0)
 T, F = dataset[0][0].shape
-feature_names = config["data"]["columns"] + [f"{col}_rate" for col in config["data"].get("derivative_columns", [])]
+feature_names = config["data"]["columns"] + [
+    f"{col}_rate" for col in config["data"].get("derivative_columns", [])
+]
 expanded_names = [f"{name}_t{t}" for t in range(T) for name in feature_names]
 
 indices = np.argsort(avg_importances)[::-1][:20]
@@ -84,7 +86,12 @@ plt.xlabel("Average Importance")
 plt.tight_layout()
 plt.show()
 
-wandb.log({f"feature_importance/{name}": float(imp) for name, imp in zip(top_features, top_importances)})
+wandb.log(
+    {
+        f"feature_importance/{name}": float(imp)
+        for name, imp in zip(top_features, top_importances)
+    }
+)
 
 # === Inference on data/test ===
 print("\n Running inference on unseen test data...")
@@ -95,7 +102,7 @@ test_dataset = ExcelDatasetTimeSeries(
     stats_path=config["data"]["stats_path"],
     use_stats=True,
     min_required_length=config["data"]["min_required_length"],
-    derivative_columns=config["data"].get("derivative_columns", [])
+    derivative_columns=config["data"].get("derivative_columns", []),
 )
 
 X_test = []
