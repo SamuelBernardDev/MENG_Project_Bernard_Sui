@@ -49,6 +49,22 @@ def grayscale(df):
     return df.mean(axis=1, keepdims=True)
 
 
+def contains_outliers(df, factor=10.0):
+    """
+    Return True if any column has values outside the IQR bounds by a given factor.
+    This detects extreme outliers only.
+    """
+    for col in df.columns:
+        q1 = df[col].quantile(0.25)
+        q3 = df[col].quantile(0.75)
+        iqr = q3 - q1
+        lower_bound = q1 - factor * iqr
+        upper_bound = q3 + factor * iqr
+        if ((df[col] < lower_bound) | (df[col] > upper_bound)).any():
+            return True
+    return False
+
+
 def preprocess_single_file(
     file_path, columns, global_min, global_max, time_format="%I:%M:%S%p"
 ):

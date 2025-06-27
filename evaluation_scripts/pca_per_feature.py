@@ -16,9 +16,9 @@ dataset = ExcelDatasetTimeSeries(
     root_folder=config["data"]["root_folder"],
     columns=config["data"]["columns"],
     stats_path=config["data"]["stats_path"],
-    use_stats=config["data"]["use_stats"],
+    is_train=config["data"]["use_stats"],
     min_required_length=config["data"]["min_required_length"],
-    derivative_columns=config["data"].get("derivative_columns", [])
+    derivative_columns=config["data"].get("derivative_columns", []),
 )
 
 # === Collect all sequences ===
@@ -43,7 +43,9 @@ N, T, F = X_data.shape
 print(f" Loaded {N} sequences with {T} time steps and {F} features each.")
 
 # === Setup ===
-feature_names = config["data"]["columns"] + [f"{col}_rate" for col in config["data"].get("derivative_columns", [])]
+feature_names = config["data"]["columns"] + [
+    f"{col}_rate" for col in config["data"].get("derivative_columns", [])
+]
 separation_scores = {}
 
 # === PCA and plotting per feature ===

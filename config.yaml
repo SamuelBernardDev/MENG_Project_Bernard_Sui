@@ -1,5 +1,5 @@
 data:
-  root_folder: "data/raw"
+  root_folder: "data/raw/SCENTROID_data_06_202025/Patient_classification"
   columns:
     - Temperature
     - Humidity
@@ -13,16 +13,18 @@ data:
   stats_path: "src/data/normalization_stats.json"
   use_stats: false
   min_required_length: 40.0
+  min_sequence_length: 40
+  max_sequence_length: 1000
   derivative_columns: []
 
 model:
   hidden_size: 128
-  num_layers: 3
+  num_layers: 4
 
 train:
-  epochs: 200
-  batch_size: 4
-  learning_rate: 0.001
-  val_ratio: 0.25
+  epochs: 1000
+  batch_size: 8
+  learning_rate: 0.0001
+  val_ratio: 0.20
   early_stopping_patience: 10
   model_save_path: "src/models/checkpoints/lstm_model.pth"
