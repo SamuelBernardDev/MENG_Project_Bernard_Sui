@@ -1,5 +1,5 @@
 data:
-  root_folder: "data/raw/SCENTROID_data_06_202025/Patient_classification"
+  root_folder: "data/raw/SCENTROID_data_06_202025/Fasting_state_classification"
   columns:
     - Temperature
     - Humidity
