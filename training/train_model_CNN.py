@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import DataLoader, random_split
-from src.models.LSTMModel import CNNModel
+from src.models.CNNModel import CNNClassifier
 from utils.data_loader import ExcelDatasetCNN
 from sklearn.model_selection import KFold
 from torch.utils.data import Subset
@@ -12,7 +12,7 @@ with open("config.yaml") as f:
     config = yaml.safe_load(f)
 
 # === Initialize Weights & Biases ===
-wandb.init(project="lstm-breath-analysis", config=config)
+wandb.init(project="cnn-breath-analysis", config=config)
 
 # === Initialize dataset ===
 dataset = ExcelDatasetCNN(
@@ -20,33 +20,35 @@ dataset = ExcelDatasetCNN(
     columns=config["data"]["columns"],
     stats_path=config["data"]["stats_path"],
     use_stats=config["data"]["use_stats"],
+    min_required_length=config["data"]["min_required_length"],
 )
 
-# === Split into training and validation sets ===
-val_ratio = config["train"].get("val_ratio", 0.25)
-val_size = int(len(dataset) * val_ratio)
-train_size = len(dataset) - val_size
-train_set, val_set = random_split(dataset, [train_size, val_size])
+# # === Split into training and validation sets ===
+# val_ratio = config["train"].get("val_ratio", 0.25)
+# val_size = int(len(dataset) * val_ratio)
+# train_size = len(dataset) - val_size
+# train_set, val_set = random_split(dataset, [train_size, val_size])
 
-train_loader = DataLoader(
-    train_set, batch_size=config["train"]["batch_size"], shuffle=True
-)
-val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
+# train_loader = DataLoader(
+#     train_set, batch_size=config["train"]["batch_size"], shuffle=True
+# )
+# val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
 
-# === Initialize model ===
-model = CNNModel(
-    input_size=len(config["data"]["columns"]),
-    hidden_size=config["model"]["hidden_size"],
-    num_layers=config["model"]["num_layers"],
-    num_classes=len(dataset.label_map),
-)
+# # === Initialize model ===
+# model = CNNClassifier(
+#     input_size=len(config["data"]["columns"]),
+#     hidden_size=config["model"]["hidden_size"],
+#     num_layers=config["model"]["num_layers"],
+#     num_classes=len(dataset.label_map),
+# )
 
-# === Loss and optimizer ===
-criterion = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=config["train"]["learning_rate"])
+# # === Loss and optimizer ===
+# criterion = torch.nn.CrossEntropyLoss()
+# optimizer = torch.optim.Adam(model.parameters(), lr=config["train"]["learning_rate"])
 
 
 kf = KFold(n_splits=4, shuffle=True, random_state=42)
+fold_val_accuracies = []
 
 for fold, (train_idx, val_idx) in enumerate(kf.split(dataset)):
     print(f"\n Fold {fold + 1}")
@@ -61,24 +63,25 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(dataset)):
     val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
 
     # Initialize a new model for each fold
-    model = CNNModel(
-        input_size=len(config["data"]["columns"]),
-        hidden_size=config["model"]["hidden_size"],
-        num_layers=config["model"]["num_layers"],
-        num_classes=len(dataset.label_map),
-    )
+    model = CNNClassifier(num_classes=len(dataset.label_map))
 
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(
         model.parameters(), lr=config["train"]["learning_rate"]
     )
 
+    best_val_loss = float("inf")
+    patience = config["train"].get("early_stopping_patience", 10)
+    patience_counter = 0
+
     for epoch in range(config["train"]["epochs"]):
         model.train()
         total_loss = 0
         for sequences, labels in train_loader:
             optimizer.zero_grad()
-            outputs = model(sequences)
+            sequences = sequences.unsqueeze(1)
+            #print("Batch input shape:", sequences.shape)
+            outputs = model(sequences.float())
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -91,7 +94,8 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(dataset)):
         correct = 0
         with torch.no_grad():
             for sequences, labels in val_loader:
-                outputs = model(sequences)
+                sequences = sequences.unsqueeze(1)
+                outputs = model(sequences.float())
                 loss = criterion(outputs, labels)
                 val_loss += loss.item()
                 preds = torch.argmax(outputs, dim=1)
@@ -116,9 +120,26 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(dataset)):
             }
         )
 
-    # Save model per fold (optional)
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            patience_counter = 0
+        elif val_acc >= 0.80:
+            patience_counter += 1
+            if patience_counter >= patience:
+                print(f"Early stopping at epoch {epoch + 1} due to no improvement.")
+                break
+
+    fold_val_accuracies.append(val_acc)
+    torch.save(model.state_dict(), config["train"]["model_save_path"])
+    print(f"Fold {fold + 1} model saved.")
+
+    #Save model per fold (optional)
     fold_model_path = config["train"]["model_save_path"].replace(
         ".pth", f"_fold{fold + 1}.pth"
     )
     torch.save(model.state_dict(), fold_model_path)
     print(f"Fold {fold + 1} model saved to {fold_model_path}")
+
+    mean_acc = sum(fold_val_accuracies) / len(fold_val_accuracies)
+    print(f"\nCross-validation complete. Mean Validation Accuracy: {mean_acc:.2%}")
+    wandb.log({"crossval_mean_val_accuracy": mean_acc})
