@@ -43,6 +43,9 @@ Breath contains trace amounts of volatile organic compounds (VOCs), which can re
   - VOCs PID, Methane, Hydrogen Sulfide, Hydrogen, Nitric Oxide, Carbon Dioxide
   - Temperature and Humidity
 - **Labels**: Determined by folder name (`Brush/` or `Fasted/`)
+ - Preprocessing steps now include optional rolling mean smoothing, IQR-based
+   outlier removal, and log scaling of selected columns to reduce noise and
+   handle skewed sensor distributions.
 
 ---
 
