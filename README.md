@@ -48,11 +48,11 @@ Breath contains trace amounts of volatile organic compounds (VOCs), which can re
 
 ## Models
 
-- **Type**: Long Short-Term Memory (LSTM)
-- **Architecture**:
-  - Supports variable-length sequences
-  - Configurable hidden size, dropout, and layers
-  - Outputs class probabilities via softmax
+- **LSTMClassifier** – basic LSTM network used in `train_model.py`.
+- **ConvSequenceClassifier** – a dilated Conv1d front-end followed by an optional
+  sequence layer (LSTM/GRU/Transformer or simple pooling). Static features can be
+  concatenated before the final linear layers. Use this if your data resembles a
+  signal processing task and the plain LSTM is overfitting.
 
 ---
 
@@ -102,6 +102,12 @@ When running the model to train, it will prompt you to enter your api key, that 
 
 ```bash
 python train_model.py
+```
+
+To experiment with the `ConvSequenceClassifier`, use:
+
+```bash
+python training/train_model_conv.py
 ```
 
 This will:
