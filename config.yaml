@@ -16,6 +16,9 @@ data:
   min_sequence_length: 40
   max_sequence_length: 1000
   derivative_columns: []
+  smoothing_window: null
+  iqr_factor: null
+  log_columns: []
 
 model:
   hidden_size: 64

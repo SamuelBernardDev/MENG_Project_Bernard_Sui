@@ -6,7 +6,13 @@ import json
 import pandas as pd
 from src.models.LSTMModel import LSTMClassifier
 from utils.loading_data import load_excel
-from utils.preprocess import normalize, interpolate_df
+from utils.preprocess import (
+    normalize,
+    interpolate_df,
+    rolling_mean,
+    iqr_filter,
+    log_transform,
+)
 
 # === Load config ===
 with open("config.yaml") as f:
@@ -41,6 +47,14 @@ for fpath in test_files:
         for col in config["data"].get("derivative_columns", []):
             if col in df.columns:
                 df[f"{col}_rate"] = df[col].diff().fillna(0)
+        if config["data"].get("smoothing_window"):
+            cols = config["data"]["columns"] + [f"{c}_rate" for c in config["data"].get("derivative_columns", [])]
+            existing = [c for c in cols if c in df.columns]
+            df[existing] = rolling_mean(df[existing], config["data"]["smoothing_window"])
+        if config["data"].get("log_columns"):
+            log_transform(df, config["data"]["log_columns"])
+        if config["data"].get("iqr_factor") is not None:
+            iqr_filter(df, config["data"]["iqr_factor"])
 
         df_norm = normalize(df, global_min, global_max)
         df_final = interpolate_df(df_norm, interval=1, max_length=min_seq_len)

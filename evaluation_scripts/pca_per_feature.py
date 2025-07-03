@@ -18,6 +18,9 @@ dataset = ExcelDatasetTimeSeries(
     stats_path=config["data"]["stats_path"],
     min_required_length=config["data"]["min_required_length"],
     derivative_columns=config["data"].get("derivative_columns", []),
+    smoothing_window=config["data"].get("smoothing_window"),
+    iqr_factor=config["data"].get("iqr_factor"),
+    log_columns=config["data"].get("log_columns"),
     is_train=True,  # Set to False if using for validation/inference
     indices=None,  # Use full dataset; pass list of indices for train/val split
 )

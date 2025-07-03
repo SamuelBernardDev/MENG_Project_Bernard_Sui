@@ -65,6 +65,31 @@ def contains_outliers(df, factor=10.0):
     return False
 
 
+def iqr_filter(df, factor=1.5):
+    """Replace values outside IQR bounds with NaN."""
+    for col in df.columns:
+        q1 = df[col].quantile(0.25)
+        q3 = df[col].quantile(0.75)
+        iqr = q3 - q1
+        lower_bound = q1 - factor * iqr
+        upper_bound = q3 + factor * iqr
+        df.loc[(df[col] < lower_bound) | (df[col] > upper_bound), col] = np.nan
+    return df
+
+
+def rolling_mean(df, window):
+    """Apply a centered rolling mean."""
+    return df.rolling(window, min_periods=1, center=True).mean()
+
+
+def log_transform(df, columns):
+    """Apply log1p transform to specified columns."""
+    for col in columns:
+        if col in df.columns:
+            df[col] = np.log1p(df[col].clip(lower=0))
+    return df
+
+
 def preprocess_single_file(
     file_path, columns, global_min, global_max, time_format="%I:%M:%S%p"
 ):

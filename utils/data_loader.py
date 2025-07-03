@@ -11,6 +11,9 @@ from utils.preprocess import (
     normalize,
     interpolate_df,
     contains_outliers,
+    iqr_filter,
+    rolling_mean,
+    log_transform,
 )
 from utils.loading_data import load_excel  # Load and format an Excel file
 
@@ -26,6 +29,9 @@ class ExcelDatasetTimeSeries(Dataset):
         min_required_length=50,
         is_train=True,
         indices=None,
+        smoothing_window=None,
+        iqr_factor=None,
+        log_columns=None,
     ):
         """
         root_folder: base data directory
@@ -44,6 +50,23 @@ class ExcelDatasetTimeSeries(Dataset):
         self.is_train = is_train
         self.min_required_length = min_required_length
         self.indices = indices
+        self.smoothing_window = smoothing_window
+        self.iqr_factor = iqr_factor
+        self.log_columns = log_columns or []
+
+    def _apply_transforms(self, df):
+        for c in self.derivative_columns:
+            if c in df.columns:
+                df[f"{c}_rate"] = df[c].diff().fillna(0)
+        if self.smoothing_window and self.smoothing_window > 1:
+            cols = self.columns + [f"{c}_rate" for c in self.derivative_columns]
+            existing = [c for c in cols if c in df.columns]
+            df[existing] = rolling_mean(df[existing], self.smoothing_window)
+        if self.log_columns:
+            log_transform(df, self.log_columns)
+        if self.iqr_factor is not None:
+            iqr_filter(df, self.iqr_factor)
+        return df
 
         # initial scan: list all files and base labels
         all_paths, all_labels = [], []
@@ -83,14 +106,10 @@ class ExcelDatasetTimeSeries(Dataset):
             for fpath in self.file_paths:
                 try:
                     df = load_excel(fpath, self.columns, self.time_format)
-                    # derivative columns
-                    for c in self.derivative_columns:
-                        if c in df.columns:
-                            df[f"{c}_rate"] = df[c].diff().fillna(0)
+                    df = self._apply_transforms(df)
                     seq_len = df.index.max()
                     if seq_len < self.min_required_length:
                         continue
-                    # update stats
                     for feat in all_features:
                         if feat in df.columns:
                             vals = df[feat]
@@ -135,16 +154,7 @@ class ExcelDatasetTimeSeries(Dataset):
         fpath = self.file_paths[idx]
         label = self.labels[idx]
         df = load_excel(fpath, self.columns, self.time_format)
-        for c in self.derivative_columns:
-            if c in df.columns:
-                df[f"{c}_rate"] = df[c].diff().fillna(0)
-
-        # optional outlier removal
-        for col in self.columns:
-            std = df[col].std()
-            if std and not np.isnan(std):
-                z = (df[col] - df[col].mean()).abs() / std
-                df.loc[z > 3.0, col] = np.nan
+        df = self._apply_transforms(df)
 
         # normalize and interpolate
         df_norm = normalize(df, self.global_min, self.global_max)
