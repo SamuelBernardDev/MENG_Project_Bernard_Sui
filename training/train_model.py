@@ -34,9 +34,7 @@ kf = StratifiedKFold(n_splits=4, shuffle=True, random_state=42)
 fold_accuracies = []
 fold_aurocs = []
 
-# === For global AUROC and combined ROC plot ===
-global_probs = []
-global_targets = []
+# === For ROC plot ===
 fold_fprs = []
 fold_tprs = []
 
@@ -76,14 +74,15 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(all_indices, all_labels), 1
     )
 
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.AdamW(
         model.parameters(), lr=config["train"]["learning_rate"], weight_decay=1e-5
     )
 
     best_val_loss = float("inf")
     patience_counter = 0
     best_auc = 0
-    patience = 20
+    patience = config["train"].get("early_stopping_patience", 20)
+    min_delta = config["train"].get("early_stopping_min_delta", 0.001)
     # === Training loop ===
     for epoch in range(1, config["train"]["epochs"] + 1):
         model.train()
@@ -128,15 +127,16 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(all_indices, all_labels), 1
             f"Val Loss: {avg_val_loss:.4f} | Val Acc: {val_acc:.2%} | AUROC: {auroc:.4f}"
         )
 
-        if auroc > best_auc:
+        if auroc - best_auc > min_delta:
             best_auc = auroc
             patience_counter = 0
-        elif auroc == best_auc:
+        else:
             patience_counter += 1
 
         if patience_counter >= patience:
             print(
-                f"Early stopping at epoch {epoch + 1} due to no improvement in val loss."
+                f"Early stopping at epoch {epoch + 1} due to no AUROC improvement "
+                f"greater than {min_delta} for {patience} epochs."
             )
             break
 
@@ -159,34 +159,24 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(all_indices, all_labels), 1
     fold_fprs.append(fpr)
     fold_tprs.append(tpr)
 
-    # === Add to global
-    global_probs.extend(all_probs)
-    global_targets.extend(all_targets)
 
     # === Save model
     save_path = config["train"]["model_save_path"].format(fold)
     torch.save(model.state_dict(), save_path)
     print(f"Model saved to {save_path}")
 
-# === Compute global ROC and AUROC
-global_fpr, global_tpr, _ = roc_curve(global_targets, global_probs)
-global_auroc = roc_auc_score(global_targets, global_probs)
+# === Summary Metrics ===
+mean_acc = np.mean(fold_accuracies)
+mean_auroc = np.nanmean(fold_aurocs)
 
 # === Final ROC plot
 plt.figure(figsize=(10, 7))
 for i, (fpr, tpr, auc) in enumerate(zip(fold_fprs, fold_tprs, fold_aurocs), 1):
     plt.plot(fpr, tpr, label=f"Fold {i} (AUROC = {auc:.2f})", alpha=0.7)
 
-plt.plot(
-    global_fpr,
-    global_tpr,
-    color="black",
-    linewidth=2,
-    label=f"Combined (Global) (AUROC = {global_auroc:.2f})",
-)
-
 plt.plot([0, 1], [0, 1], "k--", label="Chance")
-plt.title("ROC Curves by Fold and Global")
+plt.plot([], [], " ", label=f"Mean AUROC = {mean_auroc:.2f}")
+plt.title("ROC Curves by Fold")
 plt.xlabel("False Positive Rate")
 plt.ylabel("True Positive Rate")
 plt.legend(loc="lower right")
@@ -195,11 +185,6 @@ plt.tight_layout()
 plt.savefig("roc_curve_all_folds.png")
 print("\nAll-fold ROC curve saved to roc_curve_all_folds.png")
 
-# === Summary
-mean_acc = np.mean(fold_accuracies)
-mean_auroc = np.nanmean(fold_aurocs)
-
 print(f"\nCross-validation complete.")
 print(f"Mean Val Accuracy: {mean_acc:.2%}")
 print(f"Mean AUROC (fold-wise): {mean_auroc:.4f}")
-print(f"Global AUROC (combined): {global_auroc:.4f}")
