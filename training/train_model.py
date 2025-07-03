@@ -1,21 +1,22 @@
+import os
+import yaml
 import torch
-from torch.utils.data import DataLoader, random_split
+import numpy as np
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+
+from torch.utils.data import DataLoader
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import roc_auc_score, roc_curve
+
 from src.models.LSTMModel import LSTMClassifier
 from utils.data_loader import ExcelDatasetTimeSeries
-from sklearn.model_selection import KFold
-from torch.utils.data import Subset
-import yaml
-import wandb
 
 # === Load config ===
 with open("config.yaml") as f:
     config = yaml.safe_load(f)
 
-# === Initialize Weights & Biases ===
-# wandb.init(project="lstm-breath-analysis", config=config)
-
-
-# initialize dataset to get total count
+# === Load full dataset for stratified split ===
 full_ds = ExcelDatasetTimeSeries(
     root_folder=config["data"]["root_folder"],
     columns=config["data"]["columns"],
@@ -24,16 +25,26 @@ full_ds = ExcelDatasetTimeSeries(
     is_train=False,
     indices=None,
 )
+
 all_indices = list(range(len(full_ds)))
+all_labels = [full_ds.labels[i] for i in all_indices]
 
-kf = KFold(n_splits=4, shuffle=True, random_state=42)
+# === Stratified K-Fold setup ===
+kf = StratifiedKFold(n_splits=4, shuffle=True, random_state=42)
 fold_accuracies = []
+fold_aurocs = []
 
-for fold, (train_idx, val_idx) in enumerate(kf.split(all_indices), 1):
+# === For global AUROC and combined ROC plot ===
+global_probs = []
+global_targets = []
+fold_fprs = []
+fold_tprs = []
+
+# === Fold loop ===
+for fold, (train_idx, val_idx) in enumerate(kf.split(all_indices, all_labels), 1):
     print(f"\n=== Fold {fold} ===")
     stats_file = f"stats_fold{fold}.json"
 
-    # create train/val datasets
     train_ds = ExcelDatasetTimeSeries(
         root_folder=config["data"]["root_folder"],
         columns=config["data"]["columns"],
@@ -56,7 +67,6 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(all_indices), 1):
     )
     val_loader = DataLoader(val_ds, batch_size=1, shuffle=False)
 
-    # model, loss, optimizer
     model = LSTMClassifier(
         input_size=len(config["data"]["columns"])
         + len(config["data"]["derivative_columns"]),
@@ -64,6 +74,7 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(all_indices), 1):
         num_layers=config["model"]["num_layers"],
         num_classes=len(train_ds.label_map),
     )
+
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(
         model.parameters(), lr=config["train"]["learning_rate"], weight_decay=1e-5
@@ -71,8 +82,9 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(all_indices), 1):
 
     best_val_loss = float("inf")
     patience_counter = 0
-
-    # training epochs
+    best_auc = 0
+    patience = 20
+    # === Training loop ===
     for epoch in range(1, config["train"]["epochs"] + 1):
         model.train()
         total_loss = 0
@@ -85,40 +97,109 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(all_indices), 1):
             total_loss += loss.item()
         avg_train_loss = total_loss / len(train_loader)
 
-        # validation
+        # === Validation loop ===
         model.eval()
         val_loss = 0
         correct = 0
+        all_probs = []
+        all_targets = []
         with torch.no_grad():
             for seqs, labels in val_loader:
                 outputs = model(seqs)
+                probs = F.softmax(outputs, dim=1)[:, 1]
+                all_probs.append(probs.item())
+                all_targets.append(labels.item())
+
                 loss = criterion(outputs, labels)
                 val_loss += loss.item()
                 preds = outputs.argmax(dim=1)
                 correct += (preds == labels).sum().item()
+
         avg_val_loss = val_loss / len(val_loader)
         val_acc = correct / len(val_ds)
 
+        try:
+            auroc = roc_auc_score(all_targets, all_probs)
+        except ValueError:
+            auroc = float("nan")
+
         print(
-            f"Epoch {epoch:02d} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Val Acc: {val_acc:.2%}"
+            f"Epoch {epoch:02d} | Train Loss: {avg_train_loss:.4f} | "
+            f"Val Loss: {avg_val_loss:.4f} | Val Acc: {val_acc:.2%} | AUROC: {auroc:.4f}"
         )
 
-        if avg_val_loss < best_val_loss:
-            best_val_loss = avg_val_loss
+        if auroc > best_auc:
+            best_auc = auroc
             patience_counter = 0
-        elif val_acc >= 0.80:
+        elif auroc == best_auc:
             patience_counter += 1
-            if patience_counter >= 10:
-                print(
-                    f"Early stopping at epoch {epoch + 1} due to no improvement in val loss."
-                )
-                break
+
+        if patience_counter >= patience:
+            print(
+                f"Early stopping at epoch {epoch + 1} due to no improvement in val loss."
+            )
+            break
+
+        # if avg_val_loss < best_val_loss:
+        #     best_val_loss = avg_val_loss
+        #     patience_counter = 0
+        # elif val_acc >= 0.80:
+        #     patience_counter += 1
+        #     if patience_counter >= 12:
+        #         print(
+        #             f"Early stopping at epoch {epoch + 1} due to no improvement in val loss."
+        #         )
+        #         break
 
     fold_accuracies.append(val_acc)
-    # save model
+    fold_aurocs.append(auroc)
+
+    # === Collect fold-level ROC data
+    fpr, tpr, _ = roc_curve(all_targets, all_probs)
+    fold_fprs.append(fpr)
+    fold_tprs.append(tpr)
+
+    # === Add to global
+    global_probs.extend(all_probs)
+    global_targets.extend(all_targets)
+
+    # === Save model
     save_path = config["train"]["model_save_path"].format(fold)
     torch.save(model.state_dict(), save_path)
     print(f"Model saved to {save_path}")
 
-mean_acc = sum(fold_accuracies) / len(fold_accuracies)
-print(f"\nCross-validation complete. Mean Val Acc: {mean_acc:.2%}")
+# === Compute global ROC and AUROC
+global_fpr, global_tpr, _ = roc_curve(global_targets, global_probs)
+global_auroc = roc_auc_score(global_targets, global_probs)
+
+# === Final ROC plot
+plt.figure(figsize=(10, 7))
+for i, (fpr, tpr, auc) in enumerate(zip(fold_fprs, fold_tprs, fold_aurocs), 1):
+    plt.plot(fpr, tpr, label=f"Fold {i} (AUROC = {auc:.2f})", alpha=0.7)
+
+plt.plot(
+    global_fpr,
+    global_tpr,
+    color="black",
+    linewidth=2,
+    label=f"Combined (Global) (AUROC = {global_auroc:.2f})",
+)
+
+plt.plot([0, 1], [0, 1], "k--", label="Chance")
+plt.title("ROC Curves by Fold and Global")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.legend(loc="lower right")
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("roc_curve_all_folds.png")
+print("\nAll-fold ROC curve saved to roc_curve_all_folds.png")
+
+# === Summary
+mean_acc = np.mean(fold_accuracies)
+mean_auroc = np.nanmean(fold_aurocs)
+
+print(f"\nCross-validation complete.")
+print(f"Mean Val Accuracy: {mean_acc:.2%}")
+print(f"Mean AUROC (fold-wise): {mean_auroc:.4f}")
+print(f"Global AUROC (combined): {global_auroc:.4f}")

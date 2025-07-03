@@ -1,13 +1,13 @@
 data:
-  root_folder: "data/raw/SCENTROID_data_06_202025/Fasting_state_classification"
+  root_folder: "data/raw/SCENTROID_data_06_202025/Metabolic_abnormality_classification/Metabolic_combined"
   columns:
     - Temperature
     - Humidity
     - Hydrogen Sulfide - LC (PPM)
     - Hydrogen (PPM)
     - Nitric Oxide - LC (PPM)
-    - Air Contaminants (PPM)
     - VOCs PID - LC (PPM)
+    - Air Contaminants (PPM)  
     - Methane - LEL (PPM)
     - Carbon Dioxide - LC (PPM)
   stats_path: "src/data/normalization_stats.json"
@@ -18,11 +18,11 @@ data:
   derivative_columns: []
 
 model:
-  hidden_size: 128
-  num_layers: 4
+  hidden_size: 64
+  num_layers: 3
 
 train:
-  epochs: 1000
+  epochs: 160
   batch_size: 8
   learning_rate: 0.0001
   val_ratio: 0.20

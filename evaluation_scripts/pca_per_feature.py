@@ -16,14 +16,24 @@ dataset = ExcelDatasetTimeSeries(
     root_folder=config["data"]["root_folder"],
     columns=config["data"]["columns"],
     stats_path=config["data"]["stats_path"],
-    is_train=config["data"]["use_stats"],
     min_required_length=config["data"]["min_required_length"],
     derivative_columns=config["data"].get("derivative_columns", []),
+    is_train=True,  # Set to False if using for validation/inference
+    indices=None,  # Use full dataset; pass list of indices for train/val split
 )
 
 # === Collect all sequences ===
 X_data = []
 y_labels = []
+root_folder = config["data"]["root_folder"]
+
+all_paths, all_labels = [], {}
+subfolders = [f.path for f in os.scandir(root_folder) if f.is_dir()]
+subfolders.sort()
+
+for idx, folder in enumerate(subfolders):
+    print("Label:", idx, "Folder:", folder)
+    all_labels[idx] = os.path.basename(folder)
 
 for i in range(len(dataset)):
     try:
@@ -40,7 +50,7 @@ if X_data.ndim != 3:
     raise ValueError("Expected 3D array [samples, time, features]")
 
 N, T, F = X_data.shape
-print(f" Loaded {N} sequences with {T} time steps and {F} features each.")
+print(f"Loaded {N} sequences with {T} time steps and {F} features each.")
 
 # === Setup ===
 feature_names = config["data"]["columns"] + [
@@ -65,7 +75,12 @@ for i in range(F):
         plt.figure(figsize=(8, 6))
         for label in classes:
             idx = y_labels == label
-            plt.scatter(X_pca[idx, 0], X_pca[idx, 1], label=f"Class {label}", alpha=0.6)
+            plt.scatter(
+                X_pca[idx, 0],
+                X_pca[idx, 1],
+                label=f"Class {all_labels[label]}",
+                alpha=0.6,
+            )
         plt.title(f"{feature_names[i]} (Score: {score:.2f})")
         plt.xlabel("PC1")
         plt.ylabel("PC2")
@@ -78,11 +93,11 @@ for i in range(F):
         print(f"Failed PCA for feature {feature_names[i]}: {e}")
 
 # === Ranking ===
-print("\n PCA Separation Scores:")
+print("\nPCA Separation Scores:")
 ranked = sorted(separation_scores.items(), key=lambda x: x[1], reverse=True)
 for i, (name, score) in enumerate(ranked, 1):
     print(f"{i}. {name}: {score:.2f}")
 
-print("\n Class Label Mapping (folder name → label index):")
+print("\nClass Label Mapping (folder name → label index):")
 for name, idx in dataset.label_map.items():
     print(f"  Label {idx}: {name}")

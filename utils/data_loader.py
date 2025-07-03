@@ -51,6 +51,7 @@ class ExcelDatasetTimeSeries(Dataset):
         subfolders.sort()
         self.label_map = {}
         for idx, folder in enumerate(subfolders):
+            print("Label:", idx, "Folder:", folder)
             label = idx  # use folder index as label
             self.label_map[os.path.basename(folder).lower()] = label
             for fpath in glob.glob(os.path.join(folder, "*.xls")):
