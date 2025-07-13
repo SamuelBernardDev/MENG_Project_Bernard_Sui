@@ -47,7 +47,8 @@ def train_epoch(model, loader, criterion, optimizer):
     return total_loss / len(loader)
 
 
-def evaluate(model, loader, criterion):
+def evaluate(model, loader, criterion, threshold=0.5, return_probs=False):
+    """Evaluate model on given loader."""
     model.eval()
     val_loss = 0.0
     correct = 0
@@ -60,7 +61,7 @@ def evaluate(model, loader, criterion):
             all_probs.append(probs.item())
             all_targets.append(labels.item())
             val_loss += criterion(outputs, labels).item()
-            preds = outputs.argmax(dim=1)
+            preds = (probs >= threshold).long()
             correct += (preds == labels).sum().item()
     avg_val_loss = val_loss / len(loader)
     val_acc = correct / len(loader.dataset)
@@ -68,13 +69,16 @@ def evaluate(model, loader, criterion):
         auroc = roc_auc_score(all_targets, all_probs)
     except ValueError:
         auroc = float("nan")
+    if return_probs:
+        return avg_val_loss, val_acc, auroc, (all_probs, all_targets)
     return avg_val_loss, val_acc, auroc
 
 
 def cross_validate(model_type: str, config: dict, indices, labels):
-    """Run 4-fold cross validation and print metrics per fold."""
+    """Run 4-fold cross validation and return best threshold."""
     kf = StratifiedKFold(n_splits=4, shuffle=True, random_state=42)
     fold_aurocs = []
+    fold_thresholds = []
     for fold, (train_idx, val_idx) in enumerate(kf.split(indices, labels), 1):
         stats_file = f"stats_fold{fold}.json"
         # compute stats on training subset
@@ -117,13 +121,21 @@ def cross_validate(model_type: str, config: dict, indices, labels):
         optimizer = torch.optim.AdamW(model.parameters(), lr=config["train"]["learning_rate"], weight_decay=1e-5)
 
         best_auc = 0.0
+        best_threshold = 0.5
         patience = config["train"].get("early_stopping_patience", 20)
         min_delta = config["train"].get("early_stopping_min_delta", 0.001)
         patience_counter = 0
 
         for epoch in range(1, config["train"]["epochs"] + 1):
             train_epoch(model, train_loader, criterion, optimizer)
-            _, val_acc, auroc = evaluate(model, val_loader, criterion)
+            _, val_acc, auroc, (probs, targets) = evaluate(
+                model, val_loader, criterion, return_probs=True
+            )
+            from sklearn.metrics import roc_curve
+
+            fpr, tpr, thresholds = roc_curve(targets, probs)
+            youden = tpr - fpr
+            optimal_threshold = thresholds[int(np.argmax(youden))]
 
             print(
                 f"Fold {fold} Epoch {epoch:02d} | Val Acc: {val_acc:.2%} | AUROC: {auroc:.4f}"
@@ -131,6 +143,7 @@ def cross_validate(model_type: str, config: dict, indices, labels):
 
             if auroc - best_auc > min_delta:
                 best_auc = auroc
+                best_threshold = optimal_threshold
                 patience_counter = 0
             else:
                 patience_counter += 1
@@ -139,12 +152,16 @@ def cross_validate(model_type: str, config: dict, indices, labels):
                 print(f"Early stopping on fold {fold} at epoch {epoch}")
                 break
         fold_aurocs.append(best_auc)
+        fold_thresholds.append(best_threshold)
         os.remove(stats_file)
     mean_auroc = np.nanmean(fold_aurocs)
-    print(f"\nCross-validation mean AUROC: {mean_auroc:.4f}\n")
+    mean_threshold = float(np.nanmean(fold_thresholds))
+    print(f"\nCross-validation mean AUROC: {mean_auroc:.4f}")
+    print(f"Mean optimal threshold: {mean_threshold:.4f}\n")
+    return mean_threshold
 
 
-def train_full(model_type: str, config: dict):
+def train_full(model_type: str, config: dict, threshold: float = 0.5):
     """Train selected model on the entire dataset and save weights."""
     ExcelDatasetTimeSeries(
         root_folder=config["data"]["root_folder"],
@@ -206,7 +223,7 @@ def train_full(model_type: str, config: dict):
 
     for epoch in range(1, config["train"]["epochs"] + 1):
         train_epoch(model, train_loader, criterion, optimizer)
-        _, val_acc, auroc = evaluate(model, val_loader, criterion)
+        _, val_acc, auroc = evaluate(model, val_loader, criterion, threshold)
 
         print(
             f"Epoch {epoch:02d} | Val Acc: {val_acc:.2%} | AUROC: {auroc:.4f}"

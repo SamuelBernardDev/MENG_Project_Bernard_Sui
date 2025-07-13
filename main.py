@@ -22,10 +22,11 @@ def main():
     indices = list(range(len(full_ds)))
     labels = [full_ds.labels[i] for i in indices]
 
+    best_threshold = 0.5
     if not skip_cv:
-        cross_validate(model_type, config, indices, labels)
+        best_threshold = cross_validate(model_type, config, indices, labels)
 
-    train_full(model_type, config)
+    train_full(model_type, config, threshold=best_threshold)
 
 
 if __name__ == "__main__":
