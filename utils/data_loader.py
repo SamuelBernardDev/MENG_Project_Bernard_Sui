@@ -54,20 +54,6 @@ class ExcelDatasetTimeSeries(Dataset):
         self.iqr_factor = iqr_factor
         self.log_columns = log_columns or []
 
-    def _apply_transforms(self, df):
-        for c in self.derivative_columns:
-            if c in df.columns:
-                df[f"{c}_rate"] = df[c].diff().fillna(0)
-        if self.smoothing_window and self.smoothing_window > 1:
-            cols = self.columns + [f"{c}_rate" for c in self.derivative_columns]
-            existing = [c for c in cols if c in df.columns]
-            df[existing] = rolling_mean(df[existing], self.smoothing_window)
-        if self.log_columns:
-            log_transform(df, self.log_columns)
-        if self.iqr_factor is not None:
-            iqr_filter(df, self.iqr_factor)
-        return df
-
         # initial scan: list all files and base labels
         all_paths, all_labels = [], []
         subfolders = [f.path for f in os.scandir(root_folder) if f.is_dir()]
@@ -164,6 +150,19 @@ class ExcelDatasetTimeSeries(Dataset):
         lbl = torch.tensor(label, dtype=torch.long)
         return seq, lbl
 
+    def _apply_transforms(self, df):
+        for c in self.derivative_columns:
+            if c in df.columns:
+                df[f"{c}_rate"] = df[c].diff().fillna(0)
+        if self.smoothing_window and self.smoothing_window > 1:
+            cols = self.columns + [f"{c}_rate" for c in self.derivative_columns]
+            existing = [c for c in cols if c in df.columns]
+            df[existing] = rolling_mean(df[existing], self.smoothing_window)
+        if self.log_columns:
+            log_transform(df, self.log_columns)
+        if self.iqr_factor is not None:
+            iqr_filter(df, self.iqr_factor)
+        return df
 
 # For Stephanie to modify as needed
 # For example, if you want to add a grayscale transformation, you can do it here.
