@@ -1,4 +1,3 @@
-import argparse
 import os
 import glob
 import json
@@ -42,7 +41,7 @@ def load_model(model_type: str, config: dict, checkpoint: str):
     return model
 
 
-def main(args):
+def main():
     # load config
     with open("config.yaml") as f:
         config = yaml.safe_load(f)
@@ -55,10 +54,10 @@ def main(args):
     min_seq_len = stats["min_seq_len"]
     max_seq_len = config["data"].get("max_sequence_length", min_seq_len)
 
-    checkpoint = args.checkpoint or config["train"]["model_save_path"]
-    model = load_model(args.model_type, config, checkpoint)
-
-    test_folder = args.test_folder
+    model_type = config.get("model_type", "lstm")
+    checkpoint = config.get("checkpoint", config["train"]["model_save_path"])
+    test_folder = config.get("test_folder", "data/test")
+    model = load_model(model_type, config, checkpoint)
     test_files = glob.glob(os.path.join(test_folder, "*/*.xls"))
 
     for fpath in test_files:
@@ -86,8 +85,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Sequence model inference")
-    parser.add_argument("--model_type", choices=["lstm", "conv"], default="lstm", help="Model architecture used during training")
-    parser.add_argument("--checkpoint", type=str, default=None, help="Path to model weights")
-    parser.add_argument("--test_folder", type=str, default="data/test", help="Folder with test samples")
-    main(parser.parse_args())
+    main()
