@@ -1,4 +1,5 @@
 import os
+import json
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -216,7 +217,7 @@ def train_full(model_type: str, config: dict, threshold: float = 0.5):
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=config["train"]["learning_rate"], weight_decay=1e-5)
 
-    best_auc = 0.0
+    best_acc = 0.0
     patience = config["train"].get("early_stopping_patience", 20)
     min_delta = config["train"].get("early_stopping_min_delta", 0.001)
     patience_counter = 0
@@ -229,8 +230,8 @@ def train_full(model_type: str, config: dict, threshold: float = 0.5):
             f"Epoch {epoch:02d} | Val Acc: {val_acc:.2%} | AUROC: {auroc:.4f}"
         )
 
-        if auroc - best_auc > min_delta:
-            best_auc = auroc
+        if val_acc - best_acc > min_delta:
+            best_acc = val_acc
             patience_counter = 0
             torch.save(model.state_dict(), config["train"]["model_save_path"])
         else:
@@ -238,9 +239,15 @@ def train_full(model_type: str, config: dict, threshold: float = 0.5):
 
         if patience_counter >= patience:
             print(
-                f"Early stopping at epoch {epoch} due to no AUROC improvement greater than {min_delta}"
+                f"Early stopping at epoch {epoch} due to no accuracy improvement greater than {min_delta}"
             )
             break
-
     torch.save(model.state_dict(), config["train"]["model_save_path"])
+    threshold_path = config["train"].get("threshold_path")
+    if threshold_path:
+        os.makedirs(os.path.dirname(threshold_path), exist_ok=True)
+        with open(threshold_path, "w") as f:
+            json.dump({"threshold": float(threshold)}, f)
     print(f"Model saved to {config['train']['model_save_path']}")
+    if threshold_path:
+        print(f"Threshold saved to {threshold_path}")
