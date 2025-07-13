@@ -56,6 +56,11 @@ def main():
 
     model_type = config.get("model_type", "lstm")
     checkpoint = config.get("checkpoint", config["train"]["model_save_path"])
+    threshold_path = config["train"].get("threshold_path")
+    threshold = 0.5
+    if threshold_path and os.path.exists(threshold_path):
+        with open(threshold_path) as f:
+            threshold = json.load(f).get("threshold", 0.5)
     test_folder = config.get("test_folder", "data/test")
     model = load_model(model_type, config, checkpoint)
     test_files = glob.glob(os.path.join(test_folder, "*/*.xls"))
@@ -81,8 +86,9 @@ def main():
             with torch.no_grad():
                 output = model(sequence)
                 probs = torch.softmax(output, dim=1).squeeze()
-                pred = torch.argmax(probs).item()
-                conf = probs[pred].item()
+                prob_pos = probs[1].item() if probs.ndim > 0 else float(probs)
+                pred = 1 if prob_pos >= threshold else 0
+                conf = prob_pos if pred == 1 else 1 - prob_pos
 
             label = class_names[pred] if pred < len(class_names) else str(pred)
             print(

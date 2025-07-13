@@ -32,6 +32,7 @@ train:
   early_stopping_patience: 10
   early_stopping_min_delta: 0.001
   model_save_path: "src/models/checkpoints/lstm_model.pth"
+  threshold_path: "src/models/checkpoints/threshold.json"
 
 # Default configuration for scripts
 model_type: "lstm"
