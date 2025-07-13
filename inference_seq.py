@@ -60,6 +60,11 @@ def main():
     model = load_model(model_type, config, checkpoint)
     test_files = glob.glob(os.path.join(test_folder, "*/*.xls"))
 
+    # Map predicted indices to folder names for clearer output
+    class_names = sorted(
+        [d for d in os.listdir(test_folder) if os.path.isdir(os.path.join(test_folder, d))]
+    )
+
     for fpath in test_files:
         try:
             df = load_excel(fpath, config["data"]["columns"], time_format="%I:%M:%S%p")
@@ -79,7 +84,10 @@ def main():
                 pred = torch.argmax(probs).item()
                 conf = probs[pred].item()
 
-            print(f"File: {os.path.basename(fpath)} | Prediction: {pred} | Confidence: {conf:.2%}")
+            label = class_names[pred] if pred < len(class_names) else str(pred)
+            print(
+                f"File: {os.path.basename(fpath)} | Prediction: {label} | Confidence: {conf:.2%}"
+            )
         except Exception as e:
             print(f"Failed to process {os.path.basename(fpath)}: {e}")
 
