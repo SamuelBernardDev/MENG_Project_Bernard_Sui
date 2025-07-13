@@ -53,6 +53,7 @@ def main(args):
     global_min = pd.Series(stats["min"])
     global_max = pd.Series(stats["max"])
     min_seq_len = stats["min_seq_len"]
+    max_seq_len = config["data"].get("max_sequence_length", min_seq_len)
 
     checkpoint = args.checkpoint or config["train"]["model_save_path"]
     model = load_model(args.model_type, config, checkpoint)
@@ -68,7 +69,9 @@ def main(args):
                     df[f"{col}_rate"] = df[col].diff().fillna(0)
 
             df_norm = normalize(df, global_min, global_max)
-            df_final = interpolate_df(df_norm, interval=1, max_length=min_seq_len)
+            df_final = interpolate_df(
+                df_norm, interval=1, max_length=max_seq_len
+            )
             sequence = torch.tensor(df_final.values.astype("float32")).unsqueeze(0)
 
             with torch.no_grad():
