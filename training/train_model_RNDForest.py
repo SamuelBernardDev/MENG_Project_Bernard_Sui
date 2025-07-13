@@ -20,9 +20,11 @@ dataset = ExcelDatasetTimeSeries(
     root_folder=config["data"]["root_folder"],
     columns=config["data"]["columns"],
     stats_path=config["data"]["stats_path"],
-    use_stats=config["data"]["use_stats"],
     min_required_length=config["data"]["min_required_length"],
     derivative_columns=config["data"].get("derivative_columns", []),
+    smoothing_window=config["data"].get("smoothing_window"),
+    iqr_factor=config["data"].get("iqr_factor"),
+    log_columns=config["data"].get("log_columns"),
 )
 
 # === Load all data into arrays ===
@@ -100,9 +102,11 @@ test_dataset = ExcelDatasetTimeSeries(
     root_folder="data/test",
     columns=config["data"]["columns"],
     stats_path=config["data"]["stats_path"],
-    use_stats=True,
     min_required_length=config["data"]["min_required_length"],
     derivative_columns=config["data"].get("derivative_columns", []),
+    smoothing_window=config["data"].get("smoothing_window"),
+    iqr_factor=config["data"].get("iqr_factor"),
+    log_columns=config["data"].get("log_columns"),
 )
 
 X_test = []

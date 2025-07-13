@@ -20,6 +20,9 @@ dataset = ExcelDatasetTimeSeries(
     is_train=True,
     min_required_length=config["data"]["min_required_length"],
     derivative_columns=config["data"].get("derivative_columns", []),
+    smoothing_window=config["data"].get("smoothing_window"),
+    iqr_factor=config["data"].get("iqr_factor"),
+    log_columns=config["data"].get("log_columns"),
     indices=None,  # Use full dataset unless a specific split is needed
 )
 
