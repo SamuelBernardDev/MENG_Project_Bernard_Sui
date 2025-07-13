@@ -4,6 +4,7 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import shutil
 
 from torch.utils.data import DataLoader
 from sklearn.model_selection import StratifiedKFold
@@ -89,9 +90,18 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(all_indices, all_labels), 1
 
     best_val_loss = float("inf")
     patience_counter = 0
-    best_auc = 0
+    best_auc_for_patience = 0
+    best_val_acc = 0
+    best_auroc = float("-inf")
     patience = config["train"].get("early_stopping_patience", 20)
     min_delta = config["train"].get("early_stopping_min_delta", 0.001)
+
+    best_metric = float("-inf")
+    best_model_path = (
+        config["train"]["model_save_path"].format(fold).replace(".pth", f"_fold{fold}_best.pth")
+    )
+    best_stats_path = stats_file.replace(".json", f"_fold{fold}_best.json")
+    best_epoch = 0
     # === Training loop ===
     for epoch in range(1, config["train"]["epochs"] + 1):
         model.train()
@@ -136,8 +146,18 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(all_indices, all_labels), 1
             f"Val Loss: {avg_val_loss:.4f} | Val Acc: {val_acc:.2%} | AUROC: {auroc:.4f}"
         )
 
-        if auroc - best_auc > min_delta:
-            best_auc = auroc
+        # Save best model based on combined metric
+        current_metric = val_acc + (auroc if not np.isnan(auroc) else 0)
+        if current_metric > best_metric:
+            best_metric = current_metric
+            best_val_acc = val_acc
+            best_auroc = auroc
+            torch.save(model.state_dict(), best_model_path)
+            shutil.copy(stats_file, best_stats_path)
+            best_epoch = epoch
+
+        if auroc - best_auc_for_patience > min_delta:
+            best_auc_for_patience = auroc
             patience_counter = 0
         else:
             patience_counter += 1
@@ -160,8 +180,8 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(all_indices, all_labels), 1
         #         )
         #         break
 
-    fold_accuracies.append(val_acc)
-    fold_aurocs.append(auroc)
+    fold_accuracies.append(best_val_acc)
+    fold_aurocs.append(best_auroc)
 
     # === Collect fold-level ROC data
     fpr, tpr, _ = roc_curve(all_targets, all_probs)
@@ -171,8 +191,8 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(all_indices, all_labels), 1
 
     # === Save model
     save_path = config["train"]["model_save_path"].format(fold)
-    torch.save(model.state_dict(), save_path)
-    print(f"Model saved to {save_path}")
+    shutil.copy(best_model_path, save_path)
+    print(f"Best model from epoch {best_epoch} saved to {save_path}")
 
 # === Summary Metrics ===
 mean_acc = np.mean(fold_accuracies)
