@@ -1,4 +1,3 @@
-import argparse
 import yaml
 
 from utils.data_loader import ExcelDatasetTimeSeries
@@ -6,13 +5,11 @@ from utils.help_training import cross_validate, train_full
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Full training pipeline")
-    parser.add_argument("--model_type", choices=["lstm", "conv"], default="lstm")
-    parser.add_argument("--skip_cv", action="store_true", help="Skip cross-validation step")
-    args = parser.parse_args()
-
     with open("config.yaml") as f:
         config = yaml.safe_load(f)
+
+    model_type = config.get("model_type", "lstm")
+    skip_cv = config.get("skip_cv", False)
 
     full_ds = ExcelDatasetTimeSeries(
         root_folder=config["data"]["root_folder"],
@@ -25,10 +22,10 @@ def main():
     indices = list(range(len(full_ds)))
     labels = [full_ds.labels[i] for i in indices]
 
-    if not args.skip_cv:
-        cross_validate(args.model_type, config, indices, labels)
+    if not skip_cv:
+        cross_validate(model_type, config, indices, labels)
 
-    train_full(args.model_type, config)
+    train_full(model_type, config)
 
 
 if __name__ == "__main__":
