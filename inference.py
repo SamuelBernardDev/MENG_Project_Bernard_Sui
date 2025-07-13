@@ -39,6 +39,11 @@ model.eval()
 test_folder = "data/test"
 test_files = glob.glob(os.path.join(test_folder, "*/*.xls"))
 
+# Map predicted indices to folder names for display
+class_names = sorted(
+    [d for d in os.listdir(test_folder) if os.path.isdir(os.path.join(test_folder, d))]
+)
+
 # === Predict on each file ===
 for fpath in test_files:
     try:
@@ -66,7 +71,10 @@ for fpath in test_files:
             pred = torch.argmax(probs).item()
             confidence = probs[pred].item()
 
-        print(f"File: {os.path.basename(fpath)} | Prediction: {pred} | Confidence: {confidence:.2%}")
+        label = class_names[pred] if pred < len(class_names) else str(pred)
+        print(
+            f"File: {os.path.basename(fpath)} | Prediction: {label} | Confidence: {confidence:.2%}"
+        )
 
     except Exception as e:
         print(f"Failed to process {os.path.basename(fpath)}: {e}")
